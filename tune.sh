@@ -127,7 +127,7 @@ EOF
 }
 
 ## SSH Secure
-ssh_secure() {
+ssh_secure_() {
 	# Ask for the new SSH port
 	read -p "新SSH端口: " new_ssh_port
 
