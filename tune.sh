@@ -121,24 +121,24 @@ bandwidth_limit_() {
 #!/bin/bash
 
 # Set the monthly limit in GiB
-MONTHLY_LIMIT=$threshold
+monthly_limit=$threshold
 
 # Get the current month's data usage from vnstat
-CURRENT_USAGE=\$(vnstat --oneline | awk -F\; '{print \$11}')
-CURRENT_USAGE_VALUE=\$(echo $CURRENT_USAGE | awk '{print \$1}')
-CURRENT_USAGE_UNIT=\$(echo $CURRENT_USAGE | awk '{print \$2}')
+current_usage=\$(vnstat --oneline | awk -F\; '{print \$11}')
+current_usage_value=\$(echo \$current_usage| awk '{print \$1}')
+current_usage_unit=\$(echo \$current_usage | awk '{print \$2}')
 
-# Convert the usage to GiB
-case $CURRENT_USAGE_UNIT in
-    "KiB") CURRENT_USAGE_IN_GIB=\$(echo "scale=2; \$CURRENT_USAGE_VALUE / 1048576" | bc) ;;
-    "MiB") CURRENT_USAGE_IN_GIB=\$(echo "scale=2; \$CURRENT_USAGE_VALUE / 1024" | bc) ;;
-    "GiB") CURRENT_USAGE_IN_GIB=\$CURRENT_USAGE_VALUE ;;
-    "TiB") CURRENT_USAGE_IN_GIB=\$(echo "scale=2; \$CURRENT_USAGE_VALUE * 1024" | bc) ;;
-    *) echo "Unknown unit: \$CURRENT_USAGE_UNIT"; exit 1 ;;
+# Convert usage to GiB
+case \$current_usage_unit in
+    "KiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value / 1048576" | bc) ;;
+    "MiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value / 1024" | bc) ;;
+    "GiB") current_usage_in_gib=\$current_usage_value ;;
+    "TiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value * 1024" | bc) ;;
+    *) echo "Unknown unit: \$unit" >&2; exit 1 ;;
 esac
 
 # Check if the current usage exceeds the limit
-if (( \$(echo "\$CURRENT_USAGE_IN_GIB >= \$MONTHLY_LIMIT" | bc -l) )); then
+if (( \$(echo "\$current_usage_in_gib >= \$monthly_limit" | bc -l) )); then
     sudo shutdown -h now
 fi
 EOF
