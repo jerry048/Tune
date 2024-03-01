@@ -167,17 +167,29 @@ ssh_secure_() {
 	fi
 
 	#Disble Root Password Login
-	ssh_dir="/root/.ssh"
-	authorized_keys="$ssh_dir/authorized_keys"
-	if [ ! -d "$ssh_dir" ] && [ ! -f "$authorized_keys" ] && [ ! "$(ls -A $ssh_dir/*.pub)" ]; then
+	keys="/root/.ssh/authorized_keys"
+
+	if ! [ -s "$keys" ]; then
 		fail "SSH 钥匙不存在"
 	else
-		sed -i 's/^PermitRootLogin yes/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
-		sed -i 's/^PermitRootLogin without-password/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
 		sed -i 's/^#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 		sed -i 's/^PubkeyAuthentication no/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-		systemctl restart sshd
-		info_2 "Root密码登录已禁用"
+		unset can_login
+		read -p "你能使用SSH密钥登录吗? (y/n): " can_login
+		while ! [[ $can_login =~ ^[YyNn]$ ]]; do
+			echo "请输入y或n"
+			read -p "你能使用SSH密钥登录吗? (y/n): " can_login
+		done
+		if [[ $can_login =~ ^[Yy]$ ]]; then
+			# Disable password login
+			sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+			sed -i 's/^PermitRootLogin yes/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+			sed -i 's/^PermitRootLogin without-password/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+			systemctl restart sshd
+			info_2 "Root密码登录已禁用"
+		else
+			fail "SSH密钥登录未启用"
+		fi
 	fi
 }
 
