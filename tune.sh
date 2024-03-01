@@ -818,16 +818,12 @@ while getopts "bstx3h" opt; do
 			threshold=$(("$threshold*1024"))
 			seperator
 			info "设置每月带库上限"
-			BLA::start_loading_animation "${BLA_classic[@]}"
-			bandwidth_limit	&> /dev/null
-			BLA::stop_loading_animation
+			bandwidth_limit
 			;;
 		s )
 			seperator
 			info "SSH登录安全設定"
-			BLA::start_loading_animation "${BLA_classic[@]}"
-			ssh_secure_ &> /dev/null
-			BLA::stop_loading_animation
+			ssh_secure_
 			;;
 		t )
 			seperator
