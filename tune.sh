@@ -780,7 +780,7 @@ install_bbrv3_() {
 			return 1
 		fi
 		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/ARM64/linux-libc-dev_-6.4.0-arm64.deb
-		if [ ! -f linux-libc-dev_-6.4.0-amd64.deb ]; then
+		if [ ! -f linux-libc-dev_-6.4.0-arm64.deb ]; then
 			fail "BBRv3 download failed"
 			rm linux-headers-6.4.0+-arm64.deb linux-image-6.4.0+-arm64.deb
 			return 1
