@@ -91,7 +91,7 @@ sysinfo_(){
 }
 
 ## Bandwidth Limit
-bandwidth_limit() {
+bandwidth_limit_() {
 	# Install vnstat if not already installed
 	if ! [ -x "$(command -v vnstat)" ]; then
 		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
@@ -104,7 +104,7 @@ bandwidth_limit() {
 		fail "vnstat 安装失败"
 		return 1
 	fi
-	sed -i 's/Interface ""/Interface "$nic"/' /etc/vnstat.conf
+	sed -i "s/Interface \"\"/Interface \"$nic\"/" /etc/vnstat.conf
 	cat << EOF > .bandwidth_limit.sh
 #!/bin/bash
 
@@ -120,7 +120,7 @@ if [[ "\$CURRENT_USAGE" -gt "\$THRESHOLD" ]]; then
 	sudo shutdown -h now
 fi
 EOF
-	chmod +x bandwidth_limit
+	chmod +x .bandwidth_limit.sh
 	# Add the script to cron
 	crontab -l | { cat; echo "* * * * * /root/.bandwidth_limit.sh"; } | crontab -
 	return 0
@@ -830,7 +830,7 @@ while getopts "bstx3h" opt; do
 			threshold=$(("$threshold*1024"))
 			seperator
 			info "设置每月带库上限"
-			bandwidth_limit
+			bandwidth_limit_
 			;;
 		s )
 			seperator
