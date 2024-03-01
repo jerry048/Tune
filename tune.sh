@@ -177,7 +177,7 @@ ssh_secure_() {
 		sed -i 's/^#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 		sed -i 's/^PubkeyAuthentication no/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 		systemctl restart sshd
-		info_2 "Root登录已禁用"
+		info_2 "Root密码登录已禁用"
 	fi
 }
 
