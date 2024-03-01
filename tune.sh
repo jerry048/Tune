@@ -85,7 +85,7 @@ sysinfo_(){
 	mem_size=$(free -m | grep Mem | awk '{print $2}')
 
 	#Network interface
-	nic=$(ip addr | grep 'state UP' | awk '{print $2}' | sed 's/.$//' | cut -d'@' -f1)
+	nic=$(ip addr | grep 'state UP' | awk '{print $2}' | sed 's/.$//' | cut -d'@' -f1 | head -1)
 
 	return 0
 }
