@@ -104,20 +104,42 @@ bandwidth_limit_() {
 		fail "vnstat 安装失败"
 		return 1
 	fi
+	# Install bc if	not already installed
+	if ! [ -x "$(command -v bc)" ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get install bc -y
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install bc -y
+		fi
+	fi
+	if ! [ -x "$(command -v bc)" ]; then
+		fail "bc 安装失败"
+		return 1
+	fi
 	sed -i "s/Interface \"\"/Interface \"$nic\"/" /etc/vnstat.conf
 	cat << EOF > .bandwidth_limit.sh
 #!/bin/bash
 
-# Set the bandwidth threshold
-THRESHOLD=$threshold
+# Set the monthly limit in GiB
+MONTHLY_LIMIT=$threshold
 
-# Get the current month's total bandwidth usage in MB
-CURRENT_USAGE=\$(vnstat --month | grep "\$(date +%b)" | awk '{print \$3}')
+# Get the current month's data usage from vnstat
+CURRENT_USAGE=\$(vnstat --oneline | awk -F\; '{print \$11}')
+CURRENT_USAGE_VALUE=\$(echo $CURRENT_USAGE | awk '{print \$1}')
+CURRENT_USAGE_UNIT=\$(echo $CURRENT_USAGE | awk '{print \$2}')
 
-# Check if the current usage exceeds the threshold
-if [[ "\$CURRENT_USAGE" -gt "\$THRESHOLD" ]]; then
-	# Shutdown command
-	sudo shutdown -h now
+# Convert the usage to GiB
+case $CURRENT_USAGE_UNIT in
+    "KiB") CURRENT_USAGE_IN_GIB=\$(echo "scale=2; \$CURRENT_USAGE_VALUE / 1048576" | bc) ;;
+    "MiB") CURRENT_USAGE_IN_GIB=\$(echo "scale=2; \$CURRENT_USAGE_VALUE / 1024" | bc) ;;
+    "GiB") CURRENT_USAGE_IN_GIB=\$CURRENT_USAGE_VALUE ;;
+    "TiB") CURRENT_USAGE_IN_GIB=\$(echo "scale=2; \$CURRENT_USAGE_VALUE * 1024" | bc) ;;
+    *) echo "Unknown unit: \$CURRENT_USAGE_UNIT"; exit 1 ;;
+esac
+
+# Check if the current usage exceeds the limit
+if (( \$(echo "\$CURRENT_USAGE_IN_GIB >= \$MONTHLY_LIMIT" | bc -l) )); then
+    sudo shutdown -h now
 fi
 EOF
 	chmod +x .bandwidth_limit.sh
@@ -813,6 +835,8 @@ while getopts "bstx3h" opt; do
 	case ${opt} in
 		b )
 			# Set the bandwidth threshold in GB
+			seperator
+			info "设置每月带库上限"
 			info_2 "输入每月带库上限 （以GB为单位）："
 			read threshold
 			while true
@@ -825,11 +849,6 @@ while getopts "bstx3h" opt; do
 					break
 				fi
 			done
-
-			# Convert the threshold to MB
-			threshold=$(("$threshold*1024"))
-			seperator
-			info "设置每月带库上限"
 			bandwidth_limit_
 			;;
 		s )
