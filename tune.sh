@@ -164,7 +164,60 @@ else
 	echo "Date Range: \$begin_date to \$end_date"
 fi
 EOF
+	chmod +x .bandwidth_limit.sh
+	# Add the script to cron
+	crontab -l | { cat; echo "* * * * * /root/.bandwidth_limit.sh"; } | crontab -
+	return 0
 }
+
+ddos_shutdown_() {
+	# Install vnstat if not already installed
+	if ! [ -x "$(command -v vnstat)" ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get install vnstat -y
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install vnstat -y
+		fi
+	fi
+	if ! [ -x "$(command -v vnstat)" ]; then
+		fail "vnstat 安装失败"
+		return 1
+	fi
+	# Install jq if not already installed
+	if ! [ -x "$(command -v jq)" ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get install jq -y
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install jq -y
+		fi
+	fi
+	if ! [ -x "$(command -v jq)" ]; then
+		fail "jq 安装失败"
+		return 1
+	fi
+	cat << EOF > .ddos_shutdown.sh
+byte_limit=\$(($speed_limit * 1024 * 1024)) 
+packet_limit=\$(($packet_limit))
+
+# Get current bandwidth usage
+byte_rate=\$(vnstat -tr 10 --json | jq '.rx.bytespersecond + .tx.bytespersecond')
+# Get current packet rate
+packet_rate=\$(vnstat -tr 10 --json | jq '.rx.packetspersecond + .tx.packetspersecond')
+
+# Check if the usage exceeds the limit
+if [[ \$byte_rate -gt \$byte_limit ]] || [[ \$packet_rate -gt \$packet_limit ]] ; then
+	sudo shutdown -h now
+else
+	echo "Byte Rate: \$byte_rate"
+	echo "Packet Rate: \$packet_rate"
+fi
+EOF
+	chmod +x .ddos_shutdown.sh
+	# Add the script to cron
+	crontab -l | { cat; echo "* * * * * /root/.ddos_shutdown.sh"; } | crontab -
+	return 0
+}
+
 
 ## SSH Secure
 ssh_secure_() {
@@ -892,7 +945,7 @@ install_bbrv3_() {
 ## Main
 sysinfo_
 update_
-while getopts "bstx3h" opt; do
+while getopts "bdstx3h" opt; do
 	case ${opt} in
 		b )
 			seperator
@@ -922,10 +975,41 @@ while getopts "bstx3h" opt; do
 				else
 					break
 				fi
+			done
 			# Add leading zero if necessary
 			reset_day=$(printf "%02d" $reset_day)
 			bandwidth_limit_
 			;;
+		d )
+			seperator
+			info "DDoS 自动关机"
+			info2 "输入DDoS攻击阈值 (Mbps):"
+			read speed_limit
+			while true
+			do
+				if ! [[ "$speed_limit" =~ ^[0-9]+$ ]]; then
+					fail "请输入数字"
+					info2 "输入DDoS攻击阈值 (Mbps):"
+					read speed_limit
+				else
+					break
+				fi
+			done
+			
+			info2 "输入DDoS攻击阈值 (pps):"
+			read packet_limit
+			while true
+			do
+				if ! [[ "$packet_limit" =~ ^[0-9]+$ ]]; then
+					fail "请输入数字"
+					info2 "输入DDoS攻击阈值 (pps):"
+					read packet_limit
+				else
+					break
+				fi
+			done
+
+			ddos_shutdown_
 		s )
 			seperator
 			info "SSH登录安全設定"
