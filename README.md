@@ -19,7 +19,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) [
 其中 `[选项]` 可以是以下几种：
 
 - `-b`：设置每月带宽使用上限。
-- `-d`: DDoS自动关机
+- `-d`：DDoS自动关机
 - `-s`：进行SSH安全配置。
 - `-t`：调整系统参数以优化性能。
 - `-x`：安装BBRx以优化网络性能。
