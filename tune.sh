@@ -124,49 +124,68 @@ bandwidth_limit_() {
 monthly_limit=$threshold
 reset_day=$reset_day
 
-# Get the current date and time
-current_year=\$(date +%Y)
-current_month=\$(date +%m)
-current_day=\$(date +%d)
+while true
+do
+	# Get the current date and time
+	current_year=\$(date +%Y)
+	current_month=\$(date +%m)
+	current_day=\$(date +%d)
 
-# Calculate the begin and end dates for vnStat
-if [[ \$current_day -ge \$reset_day ]]; then
-    begin_date="\$current_year-\$current_month-\$reset_day"
-    next_month=\$(date -d "\$begin_date +1 month" +%m)
-    next_year=\$(date -d "\$begin_date +1 month" +%Y)
-    end_date="\$next_year-\$next_month-\$reset_day"
-else
-    end_date="\$current_year-\$current_month-\$reset_day"
-    prev_month=\$(date -d "\$end_date -1 month" +%m)
-    prev_year=\$(date -d "\$end_date -1 month" +%Y)
-    begin_date="\$prev_year-\$prev_month-\$reset_day"
-fi
+	# Calculate the begin and end dates for vnStat
+	if [[ \$current_day -ge \$reset_day ]]; then
+		begin_date="\$current_year-\$current_month-\$reset_day"
+		next_month=\$(date -d "\$begin_date +1 month" +%m)
+		next_year=\$(date -d "\$begin_date +1 month" +%Y)
+		end_date="\$next_year-\$next_month-\$reset_day"
+	else
+		end_date="\$current_year-\$current_month-\$reset_day"
+		prev_month=\$(date -d "\$end_date -1 month" +%m)
+		prev_year=\$(date -d "\$end_date -1 month" +%Y)
+		begin_date="\$prev_year-\$prev_month-\$reset_day"
+	fi
 
-# Get the data usage from vnstat for the specified period
-current_usage=\$(vnstat --begin \$begin_date --end \$end_date -i "$nic" --oneline | awk -F\; '{print \$11}')
-current_usage_value=\$(echo \$current_usage| awk '{print \$1}')
-current_usage_unit=\$(echo \$current_usage | awk '{print \$2}')
+	# Get the data usage from vnstat for the specified period
+	current_usage=\$(vnstat --begin \$begin_date --end \$end_date -i "$nic" --oneline | awk -F\; '{print \$11}')
+	current_usage_value=\$(echo \$current_usage| awk '{print \$1}')
+	current_usage_unit=\$(echo \$current_usage | awk '{print \$2}')
 
-# Convert usage to GiB
-case \$current_usage_unit in
-    "KiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value / 1048576" | bc) ;;
-    "MiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value / 1024" | bc) ;;
-    "GiB") current_usage_in_gib=\$current_usage_value ;;
-    "TiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value * 1024" | bc) ;;
-    *) echo "Unknown unit: \$unit" >&2; exit 1 ;;
-esac
+	# Convert usage to GiB
+	case \$current_usage_unit in
+		"KiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value / 1048576" | bc) ;;
+		"MiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value / 1024" | bc) ;;
+		"GiB") current_usage_in_gib=\$current_usage_value ;;
+		"TiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value * 1024" | bc) ;;
+		*) echo "Unknown unit: \$unit" >&2; exit 1 ;;
+	esac
 
-# Check if the current usage exceeds the limit
-if (( \$(echo "\$current_usage_in_gib >= \$monthly_limit" | bc -l) )); then
-    sudo shutdown -h now
-else
-	echo "Current usage: \$current_usage_in_gib GiB"
-	echo "Date Range: \$begin_date to \$end_date"
-fi
+	# Check if the current usage exceeds the limit
+	if (( \$(echo "\$current_usage_in_gib >= \$monthly_limit" | bc -l) )); then
+		shutdown -h now
+	fi
+	sleep 5
+done
 EOF
 	chmod +x .bandwidth_limit.sh
-	# Add the script to cron
-	crontab -l | { cat; echo "* * * * * /root/.bandwidth_limit.sh"; } | crontab -
+	#Systemd Service
+	cat << EOF > /etc/systemd/system/bandwidth_limit.service
+[Unit]
+Description=Bandwidth Limit
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/.bandwidth_limit.sh
+Restart=always
+RestartSec=3
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=bandwidth_limit
+	
+[Install]
+WantedBy=multi-user.target
+EOF
+	systemctl enable bandwidth_limit
+	systemctl start bandwidth_limit
 	return 0
 }
 
@@ -196,25 +215,52 @@ ddos_shutdown_() {
 		return 1
 	fi
 	cat << EOF > .ddos_shutdown.sh
-byte_limit=\$(($speed_limit * 1024 * 1024)) 
+#!/bin/bash
+byte_limit=\$(($speed_limit * 1000 * 1000 / 8)) 
 packet_limit=\$(($packet_limit))
 
-# Get current bandwidth usage
-byte_rate=\$(vnstat -tr 10 --json | jq '.rx.bytespersecond + .tx.bytespersecond')
-# Get current packet rate
-packet_rate=\$(vnstat -tr 10 --json | jq '.rx.packetspersecond + .tx.packetspersecond')
+while true
+do
+	# Get current bandwidth usage
+	byte_rate=\$(vnstat -tr 30 --json | jq '.rx.bytespersecond + .tx.bytespersecond')
+	# Get current packet rate
+	packet_rate=\$(vnstat -tr 30 --json | jq '.rx.packetspersecond + .tx.packetspersecond')
 
-# Check if the usage exceeds the limit
-if [[ \$byte_rate -gt \$byte_limit ]] || [[ \$packet_rate -gt \$packet_limit ]] ; then
-	sudo shutdown -h now
-else
-	echo "Byte Rate: \$byte_rate"
-	echo "Packet Rate: \$packet_rate"
-fi
+	# Check if the usage exceeds the limit
+	if [[ \$byte_rate -gt \$byte_limit ]] || [[ \$packet_rate -gt \$packet_limit ]] ; then
+		((excess_usage_counter++))
+	else
+		excess_usage_counter=0
+	fi
+
+	# If the usage exceeds the limit for 10 minutes, shut down the server
+	if [[ \$excess_usage_counter -ge 10 ]]; then
+		shutdown -h now
+	fi
+done
 EOF
 	chmod +x .ddos_shutdown.sh
-	# Add the script to cron
-	crontab -l | { cat; echo "* * * * * /root/.ddos_shutdown.sh"; } | crontab -
+	#Systemd Service
+cat << EOF > /etc/systemd/system/ddos_shutdown.service
+[Unit]
+Description=DDoS Shutdown
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/.ddos_shutdown.sh
+Restart=always
+RestartSec=3
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=ddos_shutdown
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	systemctl enable ddos_shutdown
+	systemctl start ddos_shutdown
+
 	return 0
 }
 
