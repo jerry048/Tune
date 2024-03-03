@@ -983,26 +983,26 @@ while getopts "bdstx3h" opt; do
 		d )
 			seperator
 			info "DDoS 自动关机"
-			info2 "输入DDoS攻击阈值 (Mbps):"
+			info_2 "输入DDoS攻击阈值 (Mbps):"
 			read speed_limit
 			while true
 			do
 				if ! [[ "$speed_limit" =~ ^[0-9]+$ ]]; then
 					fail "请输入数字"
-					info2 "输入DDoS攻击阈值 (Mbps):"
+					info_2 "输入DDoS攻击阈值 (Mbps):"
 					read speed_limit
 				else
 					break
 				fi
 			done
 			
-			info2 "输入DDoS攻击阈值 (pps):"
+			info_2 "输入DDoS攻击阈值 (pps):"
 			read packet_limit
 			while true
 			do
 				if ! [[ "$packet_limit" =~ ^[0-9]+$ ]]; then
 					fail "请输入数字"
-					info2 "输入DDoS攻击阈值 (pps):"
+					info_2 "输入DDoS攻击阈值 (pps):"
 					read packet_limit
 				else
 					break
