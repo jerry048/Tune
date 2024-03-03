@@ -117,14 +117,33 @@ bandwidth_limit_() {
 		return 1
 	fi
 	sed -i "s/Interface \"\"/Interface \"$nic\"/" /etc/vnstat.conf
-	cat << EOF > .bandwidth_limit.sh
+    cat << EOF > .bandwidth_limit.sh
 #!/bin/bash
 
 # Set the monthly limit in GiB
 monthly_limit=$threshold
+reset_day=$reset_day
 
-# Get the current month's data usage from vnstat
-current_usage=\$(vnstat --oneline | awk -F\; '{print \$11}')
+# Get the current date and time
+current_year=\$(date +%Y)
+current_month=\$(date +%m)
+current_day=\$(date +%d)
+
+# Calculate the begin and end dates for vnStat
+if [[ \$current_day -ge \$reset_day ]]; then
+    begin_date="\$current_year-\$current_month-\$reset_day"
+    next_month=\$(date -d "\$begin_date +1 month" +%m)
+    next_year=\$(date -d "\$begin_date +1 month" +%Y)
+    end_date="\$next_year-\$next_month-\$reset_day"
+else
+    end_date="\$current_year-\$current_month-\$reset_day"
+    prev_month=\$(date -d "\$end_date -1 month" +%m)
+    prev_year=\$(date -d "\$end_date -1 month" +%Y)
+    begin_date="\$prev_year-\$prev_month-\$reset_day"
+fi
+
+# Get the data usage from vnstat for the specified period
+current_usage=\$(vnstat --begin \$begin_date --end \$end_date -i "$nic" --oneline | awk -F\; '{print \$11}')
 current_usage_value=\$(echo \$current_usage| awk '{print \$1}')
 current_usage_unit=\$(echo \$current_usage | awk '{print \$2}')
 
@@ -140,12 +159,11 @@ esac
 # Check if the current usage exceeds the limit
 if (( \$(echo "\$current_usage_in_gib >= \$monthly_limit" | bc -l) )); then
     sudo shutdown -h now
+else
+	echo "Current usage: \$current_usage_in_gib GiB"
+	echo "Date Range: \$begin_date to \$end_date"
 fi
 EOF
-	chmod +x .bandwidth_limit.sh
-	# Add the script to cron
-	crontab -l | { cat; echo "* * * * * /root/.bandwidth_limit.sh"; } | crontab -
-	return 0
 }
 
 ## SSH Secure
@@ -337,18 +355,18 @@ kernel_settings_() {
 		dirty_ratio=20
 		writeback_centisecs=100
 		expire_centisecs=100
-		swappiness=60
+		swappiness=80
 	elif [ $mem_size -le 512 ]; then	# 512MB or less
 		adv_win_scale=2
 		rmem_default=262144
-		rmem_max=33554432
+		rmem_max=16777216
 		tcp_rmem="8192 $rmem_default $rmem_max"
 		wmem_default=262144
-		wmem_max=33554432
+		wmem_max=16777216
 		tcp_wmem="8192 $wmem_default $wmem_max"
 		background_ratio=5
 		dirty_ratio=20
-		writeback_centisecs=300
+		writeback_centisecs=100
 		expire_centisecs=500
 		swappiness=60
 	elif [ $mem_size -le 1024 ]; then	# 1GB or less
@@ -359,23 +377,23 @@ kernel_settings_() {
 		wmem_default=262144
 		wmem_max=33554432
 		tcp_wmem="8192 $wmem_default $wmem_max"
-		background_ratio=10
+		background_ratio=5
 		dirty_ratio=30
-		writeback_centisecs=1000
-		expire_centisecs=6000
+		writeback_centisecs=100
+		expire_centisecs=1000
 		swappiness=20
 	else	# 1GB or more
 		adv_win_scale=1
 		rmem_default=262144
-		rmem_max=67108864
+		rmem_max=33554432
 		tcp_rmem="8192 $rmem_default $rmem_max"
 		wmem_default=262144
-		wmem_max=67108864
+		wmem_max=33554432
 		tcp_wmem="8192 $wmem_default $wmem_max"
-		background_ratio=10
+		background_ratio=5
 		dirty_ratio=30
-		writeback_centisecs=1000
-		expire_centisecs=6000
+		writeback_centisecs=100
+		expire_centisecs=1000
 		swappiness=10
 	fi
 	
@@ -689,6 +707,47 @@ EOF
 	return 0
 }
 
+## Configue Boot Script
+boot_script_() {
+	touch /root/.boot-script.sh && chmod +x /root/.boot-script.sh
+	cat << EOF > /root/.boot-script.sh
+#!/bin/bash
+sleep 120s
+source <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh)
+# Check if Seedbox Components is successfully loaded
+if [ \$? -ne 0 ]; then
+	exit 1
+fi
+
+sysinfo_
+if [ -z "\$virt_tech" ]; then		#If not a virtual machine
+	set_ring_buffer_
+else
+	disable_tso_
+fi
+
+if [ "\$virt_tech" != "lxc" ]; then		#If not a LXC container
+	set_txqueuelen_
+	set_initial_congestion_window_
+fi
+EOF
+# Configure the script to run during system startup
+cat << EOF > /etc/systemd/system/boot-script.service
+[Unit]
+Description=boot-script
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/.boot-script.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	systemctl enable boot-script.service
+}
+
 
 
 ## Tune
@@ -707,6 +766,8 @@ tune_() {
 		set_txqueuelen_
 		set_initial_congestion_window_
 	fi
+
+	boot_script_
 	return 0
 }
 
@@ -834,21 +895,35 @@ update_
 while getopts "bstx3h" opt; do
 	case ${opt} in
 		b )
-			# Set the bandwidth threshold in GB
 			seperator
-			info "设置每月带库上限"
-			info_2 "输入每月带库上限 （以GB为单位）："
+			# Set the bandwidth threshold in GB
+			info "设置每月带宽上限"
+			info_2 "输入每月带宽上限 （以GB为单位）："
 			read threshold
 			while true
 			do
 				if ! [[ "$threshold" =~ ^[0-9]+$ ]]; then
 					fail "请输入数字"
-					info_2 "输入每月带库上限 （以GB为单位）："
+					info_2 "输入每月带宽上限 （以GB为单位）："
 					read threshold
 				else
 					break
 				fi
 			done
+			# Set the bandwidth reset day
+			info_2 "输入带宽刷新日 (01-31): " 
+			read reset_day
+			while true
+			do
+				if ! [[ $reset_day =~ ^[0-9]{1,2}$ ]] || [ $reset_day -lt 1 ] || [ $reset_day -gt 31 ]; then
+					fail "请输入01-31之间的数字"
+					info_2 "输入带宽刷新日 (01-31): " 
+					read reset_day
+				else
+					break
+				fi
+			# Add leading zero if necessary
+			reset_day=$(printf "%02d" $reset_day)
 			bandwidth_limit_
 			;;
 		s )
