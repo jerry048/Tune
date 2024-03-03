@@ -1010,6 +1010,7 @@ while getopts "bdstx3h" opt; do
 			done
 
 			ddos_shutdown_
+			;;
 		s )
 			seperator
 			info "SSH登录安全設定"
