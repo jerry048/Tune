@@ -19,6 +19,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) [
 其中 `[选项]` 可以是以下几种：
 
 - `-b`：设置每月带宽使用上限。
+- `-d`: DDoS自动关机
 - `-s`：进行SSH安全配置。
 - `-t`：调整系统参数以优化性能。
 - `-x`：安装BBRx以优化网络性能。
@@ -28,6 +29,9 @@ bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) [
 ## 各功能模块详细说明
 ### 带宽限制 (`bandwidth_limit_`)
 此模块允许用户设置每月的带宽使用上限（以GB为单位）。当达到设定的上限时，系统将自动关闭以避免额外的带宽费用。
+
+### DDoS 防护自动关闭 (`ddos_shutdown_`)
+如果连续 10 分钟检测到 DDoS 攻击或流量异常超出预设的字节或包限制时，自动关闭服务器以保护系统。
 
 ### SSH安全设置 (`ssh_secure_`)
 通过更改SSH端口和禁用密码登录，增加SSH登录的安全性。
@@ -39,7 +43,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) [
 调整系统内核参数，包括文件打开限制、缓冲区大小、TCP队列长度等，以提高系统性能。
 
 ### BBRx安装 (`install_bbrx_`)
-安装BBRx，这是一个魔改bbr，可以提高网络传输效率，减少延迟。
+安装BBRx，这是一个魔改bbr，可以提高网络传输速度。
 
 ### BBRv3安装 (`install_bbrv3_`)
 安装BBRv3，相比普通bbr，能减少掉包
