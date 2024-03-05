@@ -1079,6 +1079,7 @@ while getopts "bdstx3h" opt; do
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			install_bbrx_ &> /dev/null
 			BLA::stop_loading_animation
+			info "重启系统以启用BBRx"
 			;;
 		3 )
 			seperator
@@ -1090,6 +1091,7 @@ while getopts "bdstx3h" opt; do
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			install_bbrv3_ &> /dev/null
 			BLA::stop_loading_animation
+			info "重启系统以启用BBRv3"
 			;;
 		h )
 			info "用法： ./tune.sh [选项]"
