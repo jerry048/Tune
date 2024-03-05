@@ -1033,7 +1033,7 @@ while getopts "bdstx3h" opt; do
 			reset_day=$(printf "%02d" $reset_day)
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			bandwidth_limit_ &> /dev/null
-			if [ $? -e 0 ]; then
+			if [ $? -eq 0 ]; then
 				bandwidth_limit_success=1
 			fi
 			BLA::stop_loading_animation
@@ -1073,7 +1073,7 @@ while getopts "bdstx3h" opt; do
 			done
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			ddos_shutdown_ &> /dev/null
-			if [ $? -e 0 ]; then
+			if [ $? -eq 0 ]; then
 				ddos_shutdown_success=1
 			fi
 			BLA::stop_loading_animation
@@ -1087,7 +1087,7 @@ while getopts "bdstx3h" opt; do
 			seperator
 			info "SSH登录安全設定"
 			ssh_secure_
-			if [ $? -e 0 ]; then
+			if [ $? -eq 0 ]; then
 				ssh_secure_success=1
 			fi
 			if [ $ssh_secure_success -eq 1 ]; then
@@ -1101,7 +1101,7 @@ while getopts "bdstx3h" opt; do
 			info "调整系统参数"
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			tune_ &> /dev/null
-			if [ $? -e 0 ]; then
+			if [ $? -eq 0 ]; then
 				tune_success=1
 			fi
 			BLA::stop_loading_animation
@@ -1120,7 +1120,7 @@ while getopts "bdstx3h" opt; do
 			fi
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			install_bbrx_ &> /dev/null
-			if [ $? -e 0 ]; then
+			if [ $? -eq 0 ]; then
 				bbrx_success=1
 			fi
 			BLA::stop_loading_animation
@@ -1139,7 +1139,7 @@ while getopts "bdstx3h" opt; do
 			fi
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			install_bbrv3_ &> /dev/null
-			if [ $? -e 0 ]; then
+			if [ $? -eq 0 ]; then
 				bbrv3_success=1
 			fi
 			BLA::stop_loading_animation
