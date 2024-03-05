@@ -303,6 +303,7 @@ ssh_secure_() {
 		systemctl restart sshd
 		fail "新SSH端口 $new_ssh_port 未打开"
 		fail "旧SSH端口未关闭"
+		return 1
 	fi
 
 	#Disble Root Password Login
@@ -310,6 +311,7 @@ ssh_secure_() {
 
 	if ! [ -s "$keys" ]; then
 		fail "SSH 钥匙不存在"
+		return 1
 	else
 		sed -i 's/^#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 		sed -i 's/^PubkeyAuthentication no/PubkeyAuthentication yes/' /etc/ssh/sshd_config
@@ -328,8 +330,10 @@ ssh_secure_() {
 			info_2 "Root密码登录已禁用"
 		else
 			fail "SSH密钥登录未启用"
+			return 1
 		fi
 	fi
+	return 0
 }
 
 ## Update
@@ -339,6 +343,7 @@ update_() {
 	elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
 		yum update -y
 	fi
+	return 0
 }
 
 ## Install Tuned
@@ -845,6 +850,7 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 EOF
 	systemctl enable boot-script.service
+	return 0
 }
 
 
@@ -991,6 +997,7 @@ install_bbrv3_() {
 ## Main
 sysinfo_
 update_
+clear
 while getopts "bdstx3h" opt; do
 	case ${opt} in
 		b )
@@ -1024,7 +1031,17 @@ while getopts "bdstx3h" opt; do
 			done
 			# Add leading zero if necessary
 			reset_day=$(printf "%02d" $reset_day)
-			bandwidth_limit_
+			BLA::start_loading_animation "${BLA_classic[@]}"
+			bandwidth_limit_ &> /dev/null
+			if [ $? -e 0 ]; then
+				bandwidth_limit_success=1
+			fi
+			BLA::stop_loading_animation
+			if [ $bandwidth_limit_success -eq 1 ]; then
+				info "每月带宽上限设置成功"
+			else
+				fail "每月带宽上限设置失败"
+			fi
 			;;
 		d )
 			seperator
@@ -1054,20 +1071,45 @@ while getopts "bdstx3h" opt; do
 					break
 				fi
 			done
-
-			ddos_shutdown_
+			BLA::start_loading_animation "${BLA_classic[@]}"
+			ddos_shutdown_ &> /dev/null
+			if [ $? -e 0 ]; then
+				ddos_shutdown_success=1
+			fi
+			BLA::stop_loading_animation
+			if [ $ddos_shutdown_success -eq 1 ]; then
+				info "DDoS 自动关机设置成功"
+			else
+				fail "DDoS 自动关机设置失败"
+			fi
 			;;
 		s )
 			seperator
 			info "SSH登录安全設定"
 			ssh_secure_
+			if [ $? -e 0 ]; then
+				ssh_secure_success=1
+			fi
+			if [ $ssh_secure_success -eq 1 ]; then
+				info "SSH登录安全設定成功"
+			else
+				fail "SSH登录安全設定失败"
+			fi
 			;;
 		t )
 			seperator
 			info "调整系统参数"
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			tune_ &> /dev/null
+			if [ $? -e 0 ]; then
+				tune_success=1
+			fi
 			BLA::stop_loading_animation
+			if [ $tune_success -eq 1 ]; then
+				Info "系统参数调整成功"
+			else
+				fail "系统参数调整失败"
+			fi
 			;;
 		x )
 			seperator
@@ -1078,8 +1120,15 @@ while getopts "bdstx3h" opt; do
 			fi
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			install_bbrx_ &> /dev/null
+			if [ $? -e 0 ]; then
+				bbrx_success=1
+			fi
 			BLA::stop_loading_animation
-			info "重启系统以启用BBRx"
+			if [ $bbrx_success -eq 1 ]; then
+				info "重启系统以启用BBRx"
+			else
+				fail "BBRx安装失败"
+			fi
 			;;
 		3 )
 			seperator
@@ -1090,13 +1139,21 @@ while getopts "bdstx3h" opt; do
 			fi
 			BLA::start_loading_animation "${BLA_classic[@]}"
 			install_bbrv3_ &> /dev/null
+			if [ $? -e 0 ]; then
+				bbrv3_success=1
+			fi
 			BLA::stop_loading_animation
-			info "重启系统以启用BBRv3"
+			if [ $bbrv3_success -eq 1 ]; then
+				info "重启系统以启用BBRv3"
+			else
+				fail "BBRv3安装失败"
+			fi
 			;;
 		h )
 			info "用法： ./tune.sh [选项]"
 			info "选项："
 			info "  -b  设置每月带库上限"
+			info "  -d  DDoS 自动关机"
 			info "  -s  SSH登录安全設定"
 			info "  -t  调整系统参数"
 			info "  -x  安装BBRx"
