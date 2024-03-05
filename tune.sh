@@ -1106,7 +1106,7 @@ while getopts "bdstx3h" opt; do
 			fi
 			BLA::stop_loading_animation
 			if [ $tune_success -eq 1 ]; then
-				Info "系统参数调整成功"
+				info "系统参数调整成功"
 			else
 				fail "系统参数调整失败"
 			fi
