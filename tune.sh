@@ -90,6 +90,37 @@ sysinfo_(){
 	return 0
 }
 
+## Update
+update_() {
+	if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+		apt-get update -y && apt-get upgrade -y
+	elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+		yum update -y
+	fi
+	return 0
+}
+
+## Auto update
+auto_update_() {
+	if [ -z $(which unattended-upgrades) ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get -y install unattended-upgrades apt-listchanges
+			if [ $? -ne 0 ]; then
+				fail "Unattended-upgrades Installation Failed"
+				return 1
+			fi
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install unattended-upgrades -y
+			if [ $? -ne 0 ]; then
+				fail "Unattended-upgrades Installation Failed"
+				return 1
+			fi
+		fi
+	fi
+	echo unattended-upgrades unattended-upgrades/enable_auto_updates boolean true | debconf-set-selections
+	dpkg-reconfigure -f noninteractive unattended-upgrades
+}
+
 ## Bandwidth Limit
 bandwidth_limit_() {
 	# Install vnstat if not already installed
@@ -189,6 +220,7 @@ EOF
 	return 0
 }
 
+## DDoS Auto Shutdown
 ddos_shutdown_() {
 	# Install vnstat if not already installed
 	if ! [ -x "$(command -v vnstat)" ]; then
@@ -265,7 +297,7 @@ EOF
 }
 
 
-## SSH Secure
+## SSH Security Settings
 ssh_secure_() {
 	# Ask for the new SSH port
 	read -p "新SSH端口: " new_ssh_port
@@ -333,20 +365,47 @@ ssh_secure_() {
 			return 1
 		fi
 	fi
-	return 0
-}
 
-## Update
-update_() {
-	if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
-		apt-get update -y && apt-get upgrade -y
-	elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
-		yum update -y
+	##Fail2ban
+	if [ -z $(which fail2ban-client) ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get install fail2ban -y
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install fail2ban -y
+		fi
 	fi
+	if [ -z $(which fail2ban-client) ]; then
+		fail "Fail2ban 安装失败"
+		return 1
+	fi
+	if [ -z $(which iptables) ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get install iptables -y
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install iptables -y
+		fi
+	fi
+	touch /etc/fail2ban/jail.local
+	cat << EOF > /etc/fail2ban/jail.local
+[sshd]
+enabled = true
+filter = sshd
+mode   = aggressive
+port    = ssh
+logpath = %(sshd_log)s
+backend=systemd
+banaction = iptables-multiport
+bantime = -1
+maxretry = 3
+findtime = 24h
+EOF
+	systemctl restart fail2ban
 	return 0
 }
 
-## Install Tuned
+
+## System tuning
+#Install Tuned
 tuned_() {
     if [ -z $(which tuned) ]; then
 		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
@@ -365,8 +424,7 @@ tuned_() {
 	fi
 	return 0
 }
-
-## File Open Limit
+#File Open Limit
 set_file_open_limit_() {
     cat << EOF >>/etc/security/limits.conf
 ## Hard limit for max opened files
@@ -376,14 +434,21 @@ root       soft nofile 1048576
 EOF
 	return 0
 }
-
-## Ring Buffer
+#Ring Buffer
 set_ring_buffer_() {
 	if [ -z $(which ethtool) ]; then
-		apt-get -y install ethtool
-		if [ $? -ne 0 ]; then
-			fail "Ethtool Installation Failed"
-			return 1
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get -y install ethtool
+			if [ $? -ne 0 ]; then
+				fail "Ethtool Installation Failed"
+				return 1
+			fi
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install ethtool -y
+			if [ $? -ne 0 ]; then
+				fail "Ethtool Installation Failed"
+				return 1
+			fi
 		fi
 	fi
     ethtool -G $nic rx 1024
@@ -400,32 +465,38 @@ set_ring_buffer_() {
     sleep 1
 	return 0
 }
-
-## Disable TSO
+#Disable TSO
 disable_tso_() {
 	if [ -z $(which ethtool) ]; then
-		apt-get -y install ethtool
-		if [ $? -ne 0 ]; then
-			fail "Ethtool Installation Failed"
-			return 1
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get -y install ethtool
+			if [ $? -ne 0 ]; then
+				fail "Ethtool Installation Failed"
+				return 1
+			fi
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install ethtool -y
+			if [ $? -ne 0 ]; then
+				fail "Ethtool Installation Failed"
+				return 1
+			fi
 		fi
 	fi
 	ethtool -K $nic tso off gso off gro off
 	sleep 1
 	return 0
 }
-
-## TCP Queue Length
+#TCP Queue Length
 set_txqueuelen_() {
 	if [ -z $(which net-tools) ]; then
 		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
-			apt-get install net-tools -qqy
+			apt-get install net-tools -y
 			if [ $? -ne 0 ]; then
 				fail "Net-tools Installation Failed"
 				return 1
 			fi
 		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
-			yum install net-tools -qqy
+			yum install net-tools -y
 			if [ $? -ne 0 ]; then
 				fail "Net-tools Installation Failed"
 				return 1
@@ -436,15 +507,13 @@ set_txqueuelen_() {
     sleep 1
 	return 0
 }
-
-## Initial Congestion Window
+#Initial Congestion Window
 set_initial_congestion_window_() {
     iproute=$(ip -o -4 route show to default)
     ip route change $iproute initcwnd 100 initrwnd 100
 	return 0
 }
-
-## Kernel Settings
+#Kernel Settings
 kernel_settings_() {
 	# Set variables based on memory size
 	if [ $mem_size -le 128 ]; then	# 128MB or less
@@ -810,6 +879,25 @@ EOF
 	sysctl -p
 	return 0
 }
+tune_() {
+	tuned_
+	set_file_open_limit_
+	kernel_settings_
+
+	if [ -z "$virt_tech" ]; then		#If not a virtual machine
+		set_ring_buffer_
+	else
+		disable_tso_
+	fi
+
+	if [ -z "$virt_tech" ] || [ "$virt_tech" != "lxc" ]; then		#If not a LXC container
+		set_txqueuelen_
+		set_initial_congestion_window_
+	fi
+
+	boot_script_
+	return 0
+}
 
 ## Configue Boot Script
 boot_script_() {
@@ -854,49 +942,8 @@ EOF
 }
 
 
-
-## Tune
-tune_() {
-	tuned_
-	set_file_open_limit_
-	kernel_settings_
-
-	if [ -z "$virt_tech" ]; then		#If not a virtual machine
-		set_ring_buffer_
-	else
-		disable_tso_
-	fi
-
-	if [ -z "$virt_tech" ] || [ "$virt_tech" != "lxc" ]; then		#If not a LXC container
-		set_txqueuelen_
-		set_initial_congestion_window_
-	fi
-
-	boot_script_
-	return 0
-}
-
-
-
 ## BBR
 install_bbrx_() {
-	#Check if $os is Set
-	if [[ -z $os ]]; then
-		# Linux Distro Version check
-		if [ -f /etc/os-release ]; then
-			. /etc/os-release
-			os=$NAME
-		elif type lsb_release >/dev/null 2>&1; then
-			os=$(lsb_release -si)
-		elif [ -f /etc/lsb-release ]; then
-			. /etc/lsb-release
-			os=$DISTRIB_ID
-		elif [ -f /etc/debian_version ]; then
-			os=Debian
-		else
-			os=$(uname -s)
-		fi
-	fi
 	if [[ "$os" =~ "Debian" ]]; then
 		if [ $(uname -m) == "x86_64" ]; then
 			apt-get -y install linux-image-amd64 linux-headers-amd64
@@ -994,12 +1041,30 @@ install_bbrv3_() {
 	return 0
 }
 
+
 ## Main
 sysinfo_
 update_
 clear
-while getopts "bdstx3h" opt; do
+while getopts "abdstx3h" opt; do
 	case ${opt} in
+		a )
+		seperator
+			info "自动更新"
+			BLA::start_loading_animation "${BLA_classic[@]}"
+			auto_update_ &> /dev/null
+			if [ $? -eq 0 ]; then
+				auto_update_success=1
+			else
+				auto_update_success=0
+			fi
+			BLA::stop_loading_animation
+			if [ $auto_update_success -eq 1 ]; then
+				info "自动更新设置成功"
+			else
+				fail "自动更新设置失败"
+			fi
+			;;
 		b )
 			seperator
 			# Set the bandwidth threshold in GB
@@ -1035,6 +1100,8 @@ while getopts "bdstx3h" opt; do
 			bandwidth_limit_ &> /dev/null
 			if [ $? -eq 0 ]; then
 				bandwidth_limit_success=1
+			else
+				bandwidth_limit_success=0
 			fi
 			BLA::stop_loading_animation
 			if [ $bandwidth_limit_success -eq 1 ]; then
@@ -1075,6 +1142,8 @@ while getopts "bdstx3h" opt; do
 			ddos_shutdown_ &> /dev/null
 			if [ $? -eq 0 ]; then
 				ddos_shutdown_success=1
+			else
+				ddos_shutdown_success=0
 			fi
 			BLA::stop_loading_animation
 			if [ $ddos_shutdown_success -eq 1 ]; then
@@ -1089,6 +1158,8 @@ while getopts "bdstx3h" opt; do
 			ssh_secure_
 			if [ $? -eq 0 ]; then
 				ssh_secure_success=1
+			else
+				ssh_secure_success=0
 			fi
 			if [ $ssh_secure_success -eq 1 ]; then
 				info "SSH登录安全設定成功"
@@ -1103,6 +1174,8 @@ while getopts "bdstx3h" opt; do
 			tune_ &> /dev/null
 			if [ $? -eq 0 ]; then
 				tune_success=1
+			else
+				tune_success=0
 			fi
 			BLA::stop_loading_animation
 			if [ $tune_success -eq 1 ]; then
@@ -1118,16 +1191,23 @@ while getopts "bdstx3h" opt; do
 				fail "不支持LXC"
 				exit 1
 			fi
-			BLA::start_loading_animation "${BLA_classic[@]}"
-			install_bbrx_ &> /dev/null
-			if [ $? -eq 0 ]; then
-				bbrx_success=1
-			fi
-			BLA::stop_loading_animation
-			if [ $bbrx_success -eq 1 ]; then
-				info "重启系统以启用BBRx"
+			#Only support Debian and Ubuntu
+			if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+				BLA::start_loading_animation "${BLA_classic[@]}"
+				install_bbrx_ &> /dev/null
+				if [ $? -eq 0 ]; then
+					bbrx_success=1
+				else
+					bbrx_success=0
+				fi
+				BLA::stop_loading_animation
+				if [ $bbrx_success -eq 1 ]; then
+					info "重启系统以启用BBRx"
+				else
+					fail "BBRx安装失败"
+				fi
 			else
-				fail "BBRx安装失败"
+				fail "不支持此系统"
 			fi
 			;;
 		3 )
@@ -1137,16 +1217,23 @@ while getopts "bdstx3h" opt; do
 				fail "不支持LXC"
 				exit 1
 			fi
-			BLA::start_loading_animation "${BLA_classic[@]}"
-			install_bbrv3_ &> /dev/null
-			if [ $? -eq 0 ]; then
-				bbrv3_success=1
-			fi
-			BLA::stop_loading_animation
-			if [ $bbrv3_success -eq 1 ]; then
-				info "重启系统以启用BBRv3"
+			#Only support Debian and Ubuntu
+			if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+				BLA::start_loading_animation "${BLA_classic[@]}"
+				install_bbrv3_ &> /dev/null
+				if [ $? -eq 0 ]; then
+					bbrv3_success=1
+				else
+					bbrv3_success=0
+				fi
+				BLA::stop_loading_animation
+				if [ $bbrv3_success -eq 1 ]; then
+					info "重启系统以启用BBRv3"
+				else
+					fail "BBRv3安装失败"
+				fi
 			else
-				fail "BBRv3安装失败"
+				fail "不支持此系统"
 			fi
 			;;
 		h )
