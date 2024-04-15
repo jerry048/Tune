@@ -365,28 +365,28 @@ ssh_secure_() {
 			return 1
 		fi
 	fi
-
-	##Fail2ban
-	if [ -z $(which fail2ban-client) ]; then
-		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
-			apt-get install fail2ban -y
-		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
-			yum install fail2ban -y
+	BLA::start_loading_animation "${BLA_classic[@]}"
+		##Fail2ban
+		if [ -z $(which fail2ban-client) ]; then
+			if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+				apt-get install fail2ban -y &> /dev/null
+			elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+				yum install fail2ban -y &> /dev/null
+			fi
 		fi
-	fi
-	if [ -z $(which fail2ban-client) ]; then
-		fail "Fail2ban 安装失败"
-		return 1
-	fi
-	if [ -z $(which iptables) ]; then
-		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
-			apt-get install iptables -y
-		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
-			yum install iptables -y
+		if [ -z $(which fail2ban-client) ]; then
+			fail "Fail2ban 安装失败"
+			return 1
 		fi
-	fi
-	touch /etc/fail2ban/jail.local
-	cat << EOF > /etc/fail2ban/jail.local
+		if [ -z $(which iptables) ]; then
+			if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+				apt-get install iptables -y &> /dev/null
+			elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+				yum install iptables -y &> /dev/null
+			fi
+		fi
+		touch /etc/fail2ban/jail.local
+		cat << EOF > /etc/fail2ban/jail.local
 [sshd]
 enabled = true
 filter = sshd
@@ -399,7 +399,8 @@ bantime = -1
 maxretry = 3
 findtime = 24h
 EOF
-	systemctl restart fail2ban
+		systemctl restart fail2ban
+	BLA::stop_loading_animation
 	return 0
 }
 
