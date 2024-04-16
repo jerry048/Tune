@@ -365,28 +365,35 @@ ssh_secure_() {
 			return 1
 		fi
 	fi
-	BLA::start_loading_animation "${BLA_classic[@]}"
-		##Fail2ban
-		if [ -z $(which fail2ban-client) ]; then
-			if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
-				apt-get install fail2ban -y &> /dev/null
-			elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
-				yum install fail2ban -y &> /dev/null
-			fi
+	return 0
+}
+
+## Fail2ban
+fail2ban_() {
+	if [ -z $(which fail2ban-client) ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get install fail2ban -y
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install fail2ban -y
 		fi
-		if [ -z $(which fail2ban-client) ]; then
-			fail "Fail2ban 安装失败"
-			return 1
+	fi
+	if [ -z $(which fail2ban-client) ]; then
+		fail "Fail2ban installation failed"
+		return 1
+	fi
+	if [ -z $(which iptables) ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get install iptables -y
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install iptables -y
 		fi
-		if [ -z $(which iptables) ]; then
-			if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
-				apt-get install iptables -y &> /dev/null
-			elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
-				yum install iptables -y &> /dev/null
-			fi
-		fi
-		touch /etc/fail2ban/jail.local
-		cat << EOF > /etc/fail2ban/jail.local
+	fi
+	if [ -z $(which iptables) ]; then
+		fail "iptables installation failed"
+		return 1
+	fi
+	touch /etc/fail2ban/jail.local
+	cat << EOF > /etc/fail2ban/jail.local
 [sshd]
 enabled = true
 filter = sshd
@@ -399,11 +406,14 @@ bantime = -1
 maxretry = 3
 findtime = 24h
 EOF
-		systemctl restart fail2ban
-	BLA::stop_loading_animation
+	systemctl restart fail2ban
+	# Check if fail2ban is running
+	if [ -z $(ps -ef | grep fail2ban | grep -v grep) ]; then
+		fail "Fail2ban failed to start"
+		return 1
+	fi
 	return 0
 }
-
 
 ## System tuning
 #Install Tuned
@@ -1166,6 +1176,19 @@ while getopts "abdstx3h" opt; do
 				info "SSH登录安全設定成功"
 			else
 				fail "SSH登录安全設定失败"
+			fi
+			BLA::start_loading_animation "${BLA_classic[@]}"
+			fail2ban_ &> /dev/null
+			if [ $? -eq 0 ]; then
+				fail2ban_success=1
+			else
+				fail2ban_success=0
+			fi
+			BLA::stop_loading_animation
+			if [ $fail2ban_success -eq 1 ]; then
+				info "Fail2ban安装成功"
+			else
+				fail "Fail2ban安装失败"
 			fi
 			;;
 		t )
