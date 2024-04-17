@@ -29,10 +29,10 @@ bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) [
 
 ### 示例
 
-启动自动更新：
+启动自动更新和设置带宽限制：
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -a
+bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -a -b
 ```
 ## 功能介绍：
 
