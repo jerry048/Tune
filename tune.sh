@@ -77,7 +77,7 @@ sysinfo_(){
 	fi
 
 	#Virtualization Technology
-	if [ $(systemd-detect-virt) != "none" ]; then	#Check virtualization using systemd-detect-virt
+	if [ $(systemd-detect-virt) != "none" ]; then
 		virt_tech=$(systemd-detect-virt)
 	fi
 
@@ -152,7 +152,8 @@ bandwidth_limit_() {
 #!/bin/bash
 
 # Set the monthly limit in GiB
-monthly_limit=$threshold
+monthly_upload_limit=$upload_threshold
+monthly_download_limit=$download_threshold
 reset_day=$reset_day
 
 while true
@@ -175,24 +176,39 @@ do
 		begin_date="\$prev_year-\$prev_month-\$reset_day"
 	fi
 
-	# Get the data usage from vnstat for the specified period
-	current_usage=\$(vnstat --begin \$begin_date --end \$end_date -i "$nic" --oneline | awk -F\; '{print \$11}')
-	current_usage_value=\$(echo \$current_usage| awk '{print \$1}')
-	current_usage_unit=\$(echo \$current_usage | awk '{print \$2}')
+	# Get the current usage
+	current_upload_usage=\$(vnstat --begin \$begin_date --end \$end_date -i "$nic" --oneline | awk -F\; '{print \$10}')
+	current_upload_usage_value=\$(echo \$current_upload_usage| awk '{print \$1}')
+	current_upload_usage_unit=\$(echo \$current_upload_usage | awk '{print \$2}')
+
+	current_download_usage=\$(vnstat --begin \$begin_date --end \$end_date -i "$nic" --oneline | awk -F\; '{print \$9}')
+	current_download_usage_value=\$(echo \$current_download_usage| awk '{print \$1}')
+	current_download_usage_unit=\$(echo \$current_download_usage | awk '{print \$2}')
 
 	# Convert usage to GiB
-	case \$current_usage_unit in
-		"KiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value / 1048576" | bc) ;;
-		"MiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value / 1024" | bc) ;;
-		"GiB") current_usage_in_gib=\$current_usage_value ;;
-		"TiB") current_usage_in_gib=\$(echo "scale=2; \$current_usage_value * 1024" | bc) ;;
+	case \$current_upload_usage_unit in
+		"KiB") current_upload_usage_in_gib=\$(echo "scale=2; \$current_upload_usage_value / 1048576" | bc) ;;
+		"MiB") current_upload_usage_in_gib=\$(echo "scale=2; \$current_upload_usage_value / 1024" | bc) ;;
+		"GiB") current_upload_usage_in_gib=\$current_upload_usage_value ;;
+		"TiB") current_upload_usage_in_gib=\$(echo "scale=2; \$current_upload_usage_value * 1024" | bc) ;;
+		*) echo "Unknown unit: \$unit" >&2; exit 1 ;;
+	esac
+	case \$current_download_usage_unit in
+		"KiB") current_download_usage_in_gib=\$(echo "scale=2; \$current_download_usage_value / 1048576" | bc) ;;
+		"MiB") current_download_usage_in_gib=\$(echo "scale=2; \$current_download_usage_value / 1024" | bc) ;;
+		"GiB") current_download_usage_in_gib=\$current_download_usage_value ;;
+		"TiB") current_download_usage_in_gib=\$(echo "scale=2; \$current_download_usage_value * 1024" | bc) ;;
 		*) echo "Unknown unit: \$unit" >&2; exit 1 ;;
 	esac
 
 	# Check if the current usage exceeds the limit
-	if (( \$(echo "\$current_usage_in_gib >= \$monthly_limit" | bc -l) )); then
+	if (( \$(echo "\$current_upload_usage_in_gib >= \$monthly_upload_limit" | bc -l) )); then
 		shutdown -h now
 	fi
+	if (( \$(echo "\$current_download_usage_in_gib >= \$monthly_download_limit" | bc -l) )); then
+		shutdown -h now
+	fi
+
 	sleep 5
 done
 EOF
@@ -217,6 +233,67 @@ WantedBy=multi-user.target
 EOF
 	systemctl enable bandwidth_limit
 	systemctl start bandwidth_limit
+	return 0
+}
+
+## CPU Abuse shutdown
+cpu_abuse_shutdown_() {
+	# Install bc if	not already installed
+	if ! [ -x "$(command -v bc)" ]; then
+		if [[ $os =~ "Ubuntu" ]] || [[ $os =~ "Debian" ]]; then
+			apt-get install bc -y
+		elif [[ $os =~ "CentOS" ]] || [[ $os =~ "Redhat" ]]; then
+			yum install bc -y
+		fi
+	fi
+	if ! [ -x "$(command -v bc)" ]; then
+		fail "bc 安装失败"
+		return 1
+	fi
+	cat << EOF > .cpu_abuse_shutdown.sh
+#!/bin/bash
+# Set the CPU usage limit
+cpu_limit=$cpu_limit
+
+while true
+do
+	# Get the current CPU usage
+	cpu_usage=\$(top -bn2 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - \$1}' | tail -1)
+
+	# Check if the usage exceeds the limit
+	if (( \$(echo "\$cpu_usage >= \$cpu_limit" | bc -l) )); then
+		((excess_usage_counter++))
+	else
+		((excess_usage_counter--))
+	fi
+
+	if [[ \$excess_usage_counter -ge 180 ]]; then
+		shutdown -h now
+	fi
+	sleep 10
+done
+EOF
+	chmod +x .cpu_abuse_shutdown.sh
+	#Systemd Service
+	cat << EOF > /etc/systemd/system/cpu_abuse_shutdown.service
+[Unit]
+Description=CPU Abuse Shutdown
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/.cpu_abuse_shutdown.sh
+Restart=always
+RestartSec=3
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=cpu_abuse_shutdown
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	systemctl enable cpu_abuse_shutdown
+	systemctl start cpu_abuse_shutdown
 	return 0
 }
 
@@ -1057,7 +1134,7 @@ install_bbrv3_() {
 sysinfo_
 update_
 clear
-while getopts "abdstx3h" opt; do
+while getopts "abcdstx3h" opt; do
 	case ${opt} in
 		a )
 		seperator
@@ -1080,14 +1157,26 @@ while getopts "abdstx3h" opt; do
 			seperator
 			# Set the bandwidth threshold in GB
 			info "设置每月带宽上限"
-			info_2 "输入每月带宽上限 （以GB为单位）："
-			read threshold
+			info_2 "输入每月带宽上传上限 （以GB为单位）："
+			read upload_threshold
 			while true
 			do
-				if ! [[ "$threshold" =~ ^[0-9]+$ ]]; then
+				if ! [[ "$upload_threshold" =~ ^[0-9]+$ ]]; then
 					fail "请输入数字"
 					info_2 "输入每月带宽上限 （以GB为单位）："
-					read threshold
+					read upload_threshold
+				else
+					break
+				fi
+			done
+			info_2 "输入每月带宽下载上限 （以GB为单位）："
+			read download_threshold
+			while true
+			do
+				if ! [[ "$download_threshold" =~ ^[0-9]+$ ]]; then
+					fail "请输入数字"
+					info_2 "输入每月带宽下载上限 （以GB为单位）："
+					read download_threshold
 				else
 					break
 				fi
@@ -1121,6 +1210,36 @@ while getopts "abdstx3h" opt; do
 				fail "每月带宽上限设置失败"
 			fi
 			;;
+		c )
+			seperator
+			info "CPU滥用关机"
+			info_2 "输入CPU滥用阈值 (0-100%):"
+			read cpu_limit
+			while true
+			do
+				if ! [[ "$cpu_limit" =~ ^[0-9]+$ ]]; then
+					fail "请输入数字"
+					info_2 "输入CPU滥用阈值 (0-100%):"
+					read cpu_limit
+				else
+					break
+				fi
+			done
+			BLA::start_loading_animation "${BLA_classic[@]}"
+			cpu_shutdown_ &> /dev/null
+			if [ $? -eq 0 ]; then
+				cpu_shutdown_success=1
+			else
+				cpu_shutdown_success=0
+			fi
+			BLA::stop_loading_animation
+			if [ $cpu_shutdown_success -eq 1 ]; then
+				info "CPU滥用关机设置成功"
+			else
+				fail "CPU滥用关机设置失败"
+			fi
+			;;
+
 		d )
 			seperator
 			info "DDoS 自动关机"
