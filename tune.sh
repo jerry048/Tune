@@ -1226,7 +1226,7 @@ while getopts "abcdstx3h" opt; do
 				fi
 			done
 			BLA::start_loading_animation "${BLA_classic[@]}"
-			cpu_shutdown_ &> /dev/null
+			cpu_abuse_shutdown_ &> /dev/null
 			if [ $? -eq 0 ]; then
 				cpu_shutdown_success=1
 			else
