@@ -148,7 +148,7 @@ bandwidth_limit_() {
 		return 1
 	fi
 	sed -i "s/Interface \"\"/Interface \"$nic\"/" /etc/vnstat.conf
-    cat << EOF > .bandwidth_limit.sh
+    cat << EOF > /root/.bandwidth_limit.sh
 #!/bin/bash
 
 # Set the monthly limit in GiB
@@ -250,7 +250,7 @@ cpu_abuse_shutdown_() {
 		fail "bc 安装失败"
 		return 1
 	fi
-	cat << EOF > .cpu_abuse_shutdown.sh
+	cat << EOF > /root/.cpu_abuse_shutdown.sh
 #!/bin/bash
 # Set the CPU usage limit
 cpu_limit=$cpu_limit
@@ -323,7 +323,7 @@ ddos_shutdown_() {
 		fail "jq 安装失败"
 		return 1
 	fi
-	cat << EOF > .ddos_shutdown.sh
+	cat << EOF > /root/.ddos_shutdown.sh
 #!/bin/bash
 byte_limit=\$(($speed_limit * 1000 * 1000 / 8)) 
 packet_limit=\$(($packet_limit))
@@ -514,11 +514,12 @@ tuned_() {
 }
 #File Open Limit
 set_file_open_limit_() {
-    cat << EOF >>/etc/security/limits.conf
+
+    cat << EOF >> /etc/security/limits.conf
 ## Hard limit for max opened files
-root        hard nofile 1048576
+* soft nofile 655360
 ## Soft limit for max opened files
-root       soft nofile 1048576
+* hard nofile 655360
 EOF
 	return 0
 }
@@ -894,8 +895,8 @@ net.ipv4.tcp_syn_retries = 7
 ### To support more connections
 #Solution 1. : Increase the maximum number of file descriptors
 # The maximum number of connections that a server can handle is determined by the maximum number of file descriptors that the server can open.
-fs.file-max=1000000
-fs.nr_open=1000000
+fs.file-max=655360
+fs.nr_open=655360
 
 #Solution 2. : Increase the number of port that the kernel can allocate for outgoing connections
 # The net.ipv4.ip_local_port_range parameter is the range of port numbers that the kernel can allocate for outgoing connections.
@@ -1056,7 +1057,7 @@ install_bbrx_() {
 		fail "Unsupported OS"
 		return 1
 	fi
-	wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRx/BBRx.sh && chmod +x BBRx.sh
+	wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRx/BBRx.sh -O /root/BBRx.sh && chmod +x /root/BBRx.sh
 	# Check if download fail
 	if [ ! -f BBRx.sh ]; then
 		fail "BBR download failed"
@@ -1082,47 +1083,47 @@ EOF
 
 install_bbrv3_() {
 	if [ $(uname -m) == "x86_64" ]; then
-		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/x86_64/linux-headers-6.4.0+-amd64.deb
-		if [ ! -f linux-headers-6.4.0+-amd64.deb ]; then
+		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/x86_64/linux-headers-6.4.0+-amd64.deb -O /root/linux-headers-6.4.0+-amd64.deb
+		if [ ! -f /root/linux-headers-6.4.0+-amd64.deb ]; then
 			fail "BBRv3 download failed"
 			return 1
 		fi
-		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/x86_64/linux-image-6.4.0+-amd64.deb
-		if [ ! -f linux-image-6.4.0+-amd64.deb ]; then
+		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/x86_64/linux-image-6.4.0+-amd64.deb -O /root/linux-image-6.4.0+-amd64.deb
+		if [ ! -f /root/linux-image-6.4.0+-amd64.deb ]; then
 			fail "BBRv3 download failed"
-			rm linux-headers-6.4.0+-amd64.deb
+			rm /root/linux-headers-6.4.0+-amd64.deb
 			return 1
 		fi
-		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/x86_64/linux-libc-dev_-6.4.0-amd64.deb
-		if [ ! -f linux-libc-dev_-6.4.0-amd64.deb ]; then
+		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/x86_64/linux-libc-dev_-6.4.0-amd64.deb -O /root/linux-libc-dev_-6.4.0-amd64.deb
+		if [ ! -f /root/linux-libc-dev_-6.4.0-amd64.deb ]; then
 			fail "BBRv3 download failed"
-			rm linux-headers-6.4.0+-amd64.deb linux-image-6.4.0+-amd64.deb
+			rm /root/linux-headers-6.4.0+-amd64.deb /root/linux-image-6.4.0+-amd64.deb
 			return 1
 		fi
-		apt install ./linux-headers-6.4.0+-amd64.deb ./linux-image-6.4.0+-amd64.deb ./linux-libc-dev_-6.4.0-amd64.deb
+		apt install /root/linux-headers-6.4.0+-amd64.deb /root/linux-image-6.4.0+-amd64.deb /root/linux-libc-dev_-6.4.0-amd64.deb
 		# Clean up
-		rm linux-headers-6.4.0+-amd64.deb linux-image-6.4.0+-amd64.deb linux-libc-dev_-6.4.0-amd64.deb
+		rm /root/linux-headers-6.4.0+-amd64.deb /root/linux-image-6.4.0+-amd64.deb /root/linux-libc-dev_-6.4.0-amd64.deb
 	elif [ $(uname -m) == "aarch64" ]; then
-		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/ARM64/linux-headers-6.4.0+-arm64.deb
-		if [ ! -f linux-headers-6.4.0+-arm64.deb ]; then
+		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/ARM64/linux-headers-6.4.0+-arm64.deb -O /root/linux-headers-6.4.0+-arm64.deb
+		if [ ! -f /root/linux-headers-6.4.0+-arm64.deb ]; then
 			fail "BBRv3 download failed"
 			return 1
 		fi
-		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/ARM64/linux-image-6.4.0+-arm64.deb
-		if [ ! -f linux-image-6.4.0+-arm64.deb ]; then
+		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/ARM64/linux-image-6.4.0+-arm64.deb -O /root/linux-image-6.4.0+-arm64.deb
+		if [ ! -f /root/linux-image-6.4.0+-arm64.deb ]; then
 			fail "BBRv3 download failed"
-			rm linux-headers-6.4.0+-arm64.deb
+			rm /root/linux-headers-6.4.0+-arm64.deb
 			return 1
 		fi
-		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/ARM64/linux-libc-dev_-6.4.0-arm64.deb
-		if [ ! -f linux-libc-dev_-6.4.0-arm64.deb ]; then
+		wget https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/BBR/BBRv3/ARM64/linux-libc-dev_-6.4.0-arm64.deb -O /root/linux-libc-dev_-6.4.0-arm64.deb
+		if [ ! -f /root/linux-libc-dev_-6.4.0-arm64.deb ]; then
 			fail "BBRv3 download failed"
-			rm linux-headers-6.4.0+-arm64.deb linux-image-6.4.0+-arm64.deb
+			rm /root/linux-headers-6.4.0+-arm64.deb linux-image-6.4.0+-arm64.deb
 			return 1
 		fi
-		apt install ./linux-headers-6.4.0+-arm64.deb ./linux-image-6.4.0+-arm64.deb ./linux-libc-dev_-6.4.0-arm64.deb
+		apt install /root/linux-headers-6.4.0+-arm64.deb /root/linux-image-6.4.0+-arm64.deb /root/linux-libc-dev_-6.4.0-arm64.deb
 		# Clean up
-		rm linux-headers-6.4.0+-arm64.deb linux-image-6.4.0+-arm64.deb linux-libc-dev_-6.4.0-arm64.deb
+		rm /root/linux-headers-6.4.0+-arm64.deb /root/linux-image-6.4.0+-arm64.deb /root/linux-libc-dev_-6.4.0-arm64.deb
 	else
 		fail "$(uname -m) is not supported"
 	fi
