@@ -469,13 +469,15 @@ fail2ban_() {
 		fail "iptables installation failed"
 		return 1
 	fi
+	# Check current ssh port
+	ssh_port=$(ss -tlnp | grep sshd | awk '{print $4}' | cut -d':' -f2 | head -1)
 	touch /etc/fail2ban/jail.local
 	cat << EOF > /etc/fail2ban/jail.local
 [sshd]
 enabled = true
 filter = sshd
 mode   = aggressive
-port    = ssh
+port    = $ssh_port
 logpath = %(sshd_log)s
 backend=systemd
 banaction = iptables-multiport
