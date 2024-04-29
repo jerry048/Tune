@@ -897,8 +897,8 @@ net.ipv4.tcp_syn_retries = 7
 ### To support more connections
 #Solution 1. : Increase the maximum number of file descriptors
 # The maximum number of connections that a server can handle is determined by the maximum number of file descriptors that the server can open.
-fs.file-max=655360
-fs.nr_open=655360
+#fs.file-max=655360
+#fs.nr_open=655360
 
 #Solution 2. : Increase the number of port that the kernel can allocate for outgoing connections
 # The net.ipv4.ip_local_port_range parameter is the range of port numbers that the kernel can allocate for outgoing connections.
@@ -972,7 +972,7 @@ EOF
 }
 tune_() {
 	tuned_
-	set_file_open_limit_
+	# set_file_open_limit_
 	kernel_settings_
 
 	if [ -z "$virt_tech" ]; then		#If not a virtual machine
