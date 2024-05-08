@@ -842,7 +842,7 @@ net.ipv4.tcp_base_mss = 1460
 net.ipv4.tcp_min_snd_mss = 536
 
 # Maximum memory used to reassemble IP fragments
-net.ipv4.ipfrag_high_threshold = 8388608
+net.ipv4.ipfrag_high_thresh = 8388608
 
 
 ### Account for a high RTT lossy network
@@ -902,17 +902,13 @@ net.ipv4.tcp_syn_retries = 7
 
 #Solution 2. : Increase the number of port that the kernel can allocate for outgoing connections
 # The net.ipv4.ip_local_port_range parameter is the range of port numbers that the kernel can allocate for outgoing connections.
-net.ipv4.ip_local_port_range="1024 65535"
+net.ipv4.ip_local_port_range=1024 65535
 
-#Solution 3. : Increase the maximum number of SYN_RECV sockets
-# The net.ipv4.tcp_max_syn_recv parameter is the maximum number of SYN_RECV sockets.
-net.ipv4.tcp_max_syn_recv=10000
-
-#Solution 4. : Increase the maximum number of sockets in TIME_WAIT state
+#Solution 3. : Increase the maximum number of sockets in TIME_WAIT state
 # The net.ipv4.tcp_max_tw_buckets parameter is the maximum number of sockets in TIME_WAIT state.
 net.ipv4.tcp_max_tw_buckets=10000
 
-#Solution 5. : Quickly discard sockets in the state FIN-WAIT-2
+#Solution 4. : Quickly discard sockets in the state FIN-WAIT-2
 # The net.ipv4.tcp_fin_timeout parameter is the maximum time that a connection in the FIN-WAIT-2 state will stay open.
 net.ipv4.tcp_fin_timeout=10
 
